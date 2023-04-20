@@ -28,7 +28,7 @@ struct Args {
 }
 
 #[derive(Debug, PartialEq, Serialize)]
-struct Waila {
+struct Base {
     kind: String,
     network: Option<Network>,
     address: Option<Address>,
@@ -40,9 +40,9 @@ struct Waila {
     //fallback: Option<Vec<Address>>,
 }
 
-impl Waila {
+impl Base {
     fn new() -> Self {
-        Waila {
+        Base {
             kind: String::new(),
             network: None,
             address: None,
@@ -56,22 +56,22 @@ impl Waila {
 }
 
 #[derive(Debug, PartialEq)]
-enum WailaError {
+enum Error {
     // Potentially overkill to create custom errors, but it can be helpful
     // to give context for fallible functions
     ParseParamsError(&'static str),
     SerializeError(String),
 }
 
-impl From<serde_json::Error> for WailaError {
+impl From<serde_json::Error> for Error {
     fn from(e: serde_json::Error) -> Self {
-        WailaError::SerializeError(
+        Error::SerializeError(
             format!("error creating json output caused by: {e}")
         )
     }
 }
 
-type Result<T> = result::Result<T, WailaError>;
+type Result<T> = result::Result<T, Error>;
 
 fn main() -> Result<()> {
     let args = Args::parse();
@@ -83,12 +83,12 @@ fn main() -> Result<()> {
         _ => Denomination::Satoshi,
     };
 
-    let waila = parse_params(&s, unit)?;
+    let map = parse_params(&s, unit)?;
 
     let json_out = if args.pretty {
-        serde_json::to_string_pretty(&waila)?
+        serde_json::to_string_pretty(&map)?
     } else {
-        serde_json::to_string(&waila)?
+        serde_json::to_string(&map)?
     };
 
     println!("{}", json_out);
@@ -96,15 +96,15 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn parse_params(s: &str, unit: Denomination) -> Result<Waila> {
+fn parse_params(s: &str, unit: Denomination) -> Result<Base> {
     let parsed = match PaymentParams::from_str(s) {
         Ok(parsed) => parsed,
         Err(_) => return Err(
-            WailaError::ParseParamsError("not a known bitcoin string")
+            Error::ParseParamsError("not a known bitcoin string")
         ),
     };
 
-    let mut waila = Waila::new();
+    let mut m = Base::new();
 
     // Any additional PaymentParams variants must be included here
     let kind = match parsed {
@@ -119,18 +119,18 @@ fn parse_params(s: &str, unit: Denomination) -> Result<Waila> {
 
     // Currently supported methods on a PaymentParams with optional
     // return type. Additional methods should be added here
-    waila.kind = String::from(kind);
-    waila.network = parsed.network();
-    waila.address = parsed.address();
-    waila.invoice = parsed.invoice();
-    waila.pubkey = parsed.node_pubkey();
+    m.kind = String::from(kind);
+    m.network = parsed.network();
+    m.address = parsed.address();
+    m.invoice = parsed.invoice();
+    m.pubkey = parsed.node_pubkey();
     if let Some(amount) = parsed.amount() {
-        waila.amount = Some(amount.to_string_with_denomination(unit));
+        m.amount = Some(amount.to_string_with_denomination(unit));
     }
-    waila.memo = parsed.memo();
-    waila.lnurl = parsed.lnurl();
+    m.memo = parsed.memo();
+    m.lnurl = parsed.lnurl();
 
-    Ok(waila)
+    Ok(m)
 }
 
 #[test]
@@ -140,7 +140,7 @@ fn not_a_bitcoin_string() {
 
     assert_eq!(
         parse_params(bad_string, unit).unwrap_err(),
-        WailaError::ParseParamsError("not a known bitcoin string")
+        Error::ParseParamsError("not a known bitcoin string")
     );
 }
     
