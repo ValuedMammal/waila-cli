@@ -1,12 +1,12 @@
-use bitcoin::{Address, Denomination, Network, PublicKey};
+#![warn(clippy::pedantic)]
+use bitcoin::{Address, Denomination, Network};
+use bitcoin::secp256k1::PublicKey;
 use bitcoin_waila::PaymentParams;
 use clap::{command, Parser};
-use core::result;
 use core::str::FromStr;
 use lightning_invoice::Invoice;
 use lnurl::lnurl::LnUrl;
 use serde::Serialize;
-use serde_json;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -37,7 +37,6 @@ struct Base {
     amount: Option<String>,
     memo: Option<String>,
     lnurl: Option<LnUrl>,
-    //fallback: Option<Vec<Address>>,
 }
 
 impl Base {
@@ -71,7 +70,7 @@ impl From<serde_json::Error> for Error {
     }
 }
 
-type Result<T> = result::Result<T, Error>;
+type Result<T> = core::result::Result<T, Error>;
 
 fn main() -> Result<()> {
     let args = Args::parse();
@@ -91,17 +90,16 @@ fn main() -> Result<()> {
         serde_json::to_string(&map)?
     };
 
-    println!("{}", json_out);
+    println!("{json_out}");
 
     Ok(())
 }
 
 fn parse_params(s: &str, unit: Denomination) -> Result<Base> {
-    let parsed = match PaymentParams::from_str(s) {
-        Ok(parsed) => parsed,
-        Err(_) => return Err(
+    let Ok(parsed) = PaymentParams::from_str(s) else {
+        return Err(
             Error::ParseParamsError("not a known bitcoin string")
-        ),
+        )
     };
 
     let mut m = Base::new();
