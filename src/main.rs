@@ -5,7 +5,10 @@ use bitcoin_waila::PaymentParams;
 use clap::{command, Parser};
 use core::str::FromStr;
 use lightning_invoice::Invoice;
+use lnurl::lightning_address::LightningAddress;
 use lnurl::lnurl::LnUrl;
+use nostr::nips::nip19::ToBech32;
+use secp256k1::XOnlyPublicKey;
 use serde::Serialize;
 
 #[derive(Parser, Debug)]
@@ -27,7 +30,13 @@ struct Args {
     query: String,
 }
 
-#[derive(Debug, PartialEq, Serialize)]
+#[derive(Debug, Serialize)]
+enum NostrValue {
+    Hex(XOnlyPublicKey),
+    Bech32(String),
+}
+
+#[derive(Debug, Serialize)]
 struct Base {
     kind: String,
     network: Option<Network>,
@@ -37,6 +46,8 @@ struct Base {
     amount: Option<String>,
     memo: Option<String>,
     lnurl: Option<LnUrl>,
+    lnaddr: Option<LightningAddress>,
+    nostr: Option<Vec<NostrValue>>,
 }
 
 impl Base {
@@ -50,6 +61,8 @@ impl Base {
             amount: None,
             memo: None,
             lnurl: None,
+            lnaddr: None,
+            nostr: None,
         }
     }
 }
@@ -113,6 +126,7 @@ fn parse_params(s: &str, unit: Denomination) -> Result<Base> {
         PaymentParams::NodePubkey(_) => "PublicKey",
         PaymentParams::LnUrl(_) => "LnUrl",
         PaymentParams::LightningAddress(_) => "LnAddress",
+        PaymentParams::Nostr(_) => "NostrValue",
     };
 
     // Currently supported methods on a PaymentParams with optional
@@ -127,6 +141,12 @@ fn parse_params(s: &str, unit: Denomination) -> Result<Base> {
     }
     m.memo = parsed.memo();
     m.lnurl = parsed.lnurl();
+    m.lnaddr = parsed.lightning_address();
+    if let Some(k) = parsed.nostr_pubkey() {
+        let bech32 = k.to_bech32().unwrap(); // handle bech32::encode err?
+        let v = vec![NostrValue::Hex(k), NostrValue::Bech32(bech32)];
+        m.nostr = Some(v);
+    }
 
     Ok(m)
 }
