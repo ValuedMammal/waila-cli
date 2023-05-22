@@ -2,8 +2,9 @@
 use bitcoin::Denomination;
 use bitcoin_waila::PaymentParams;
 use clap::{command, Parser};
+use core::fmt;
 use core::str::FromStr;
-use nostr::nips::nip19::ToBech32;
+use nostr::nips::nip19::{self, ToBech32};
 use serde_json::{json, Map, Value};
 
 #[derive(Parser, Debug)]
@@ -41,17 +42,34 @@ struct Args {
     query: String,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 enum Error {
-    ParseParamsError(&'static str),
-    SerializeError(String),
+    Serialize(serde_json::Error),
+    Bech32(nip19::Error),
 }
 
 impl From<serde_json::Error> for Error {
     fn from(e: serde_json::Error) -> Self {
-        Error::SerializeError(format!("error creating json output caused by: {e}"))
+        Error::Serialize(e)
     }
 }
+
+impl From<nip19::Error> for Error {
+    fn from(e: nip19::Error) -> Self {
+        Error::Bech32(e)
+    }
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Error::Serialize(e) => write!(f, "{e}"),
+            Error::Bech32(e) => write!(f, "{e}"),
+        }
+    }
+}
+
+impl std::error::Error for Error {}
 
 static KEYS: &[&str] = &[
     "kind", "network", "address", "invoice", "pubkey", "amount", "memo", "lnurl", "lnaddr", "nostr",
@@ -70,9 +88,8 @@ fn main() -> Result<()> {
     };
 
     let Ok(parsed) = PaymentParams::from_str(&s) else {
-        return Err(
-            Error::ParseParamsError("not a known bitcoin string")
-        )
+        println!("not a bitcoin string");
+        return Ok(())
     };
 
     // Any additional PaymentParams variants must be included here
@@ -98,7 +115,7 @@ fn main() -> Result<()> {
     };
 
     if args.nips {
-        map.insert(KEYS[9].into(), parse_nostr(&parsed));
+        map.insert(KEYS[9].into(), parse_nostr(&parsed)?);
     }
 
     let json_out = if args.pretty {
@@ -226,9 +243,9 @@ fn build_sparse(
     map
 }
 
-fn parse_nostr(parsed: &PaymentParams) -> serde_json::Value {
+fn parse_nostr(parsed: &PaymentParams) -> Result<serde_json::Value> {
     if let Some(k) = parsed.nostr_pubkey() {
-        let bech32_str = k.to_bech32().unwrap(); // todo: catch bech32::encode err
+        let bech32_str = k.to_bech32()?;
         let mut bech32 = String::from("bech32: ");
         bech32.push_str(&bech32_str);
 
@@ -236,8 +253,11 @@ fn parse_nostr(parsed: &PaymentParams) -> serde_json::Value {
         let mut hex = String::from("hex: ");
         hex.push_str(&hex_str);
 
-        Value::Array(vec![Value::String(hex), Value::String(bech32)])
+        Ok(Value::Array(vec![
+            Value::String(hex),
+            Value::String(bech32),
+        ]))
     } else {
-        json!(null)
+        Ok(json!(null))
     }
 }
