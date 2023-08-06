@@ -1,4 +1,3 @@
-#![warn(clippy::pedantic)]
 use bitcoin::Denomination;
 use bitcoin_waila::PaymentParams;
 use clap::{command, Parser};
