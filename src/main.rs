@@ -71,11 +71,6 @@ impl fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-/// Key in the resulting json output
-static KEYS: &[&str] = &[
-    "kind", "network", "address", "invoice", "pubkey", "amount", "memo", "lnurl", "lnaddr", "payjoin", "nostr",
-];
-
 type Result<T> = core::result::Result<T, Error>;
 
 fn main() -> Result<()> {
@@ -88,13 +83,30 @@ fn main() -> Result<()> {
         _ => Denomination::Satoshi,
     };
 
-    let Ok(parsed) = PaymentParams::from_str(&s) else {
+    let Ok(payment_params) = PaymentParams::from_str(&s) else {
         println!("not a bitcoin string");
         return Ok(())
     };
 
+    /* Build a json map with the following keys: 
+    All fields, if applicable, are of type String, or Vec<String>
+    in the case of 'nostr'.
+        kind
+        network
+        address
+        invoice
+        pubkey
+        amount
+        memo
+        lnurl
+        lnaddr
+        payjoin
+        nostr
+    */
+    let mut map = Map::new();
+
     // Any additional PaymentParams variants must be included here
-    let kind = match parsed {
+    let kind = match payment_params {
         PaymentParams::OnChain(_) => "OnChain",
         PaymentParams::Bip21(_) => "UnifiedUri",
         PaymentParams::Bolt11(_) => "Invoice",
@@ -105,18 +117,16 @@ fn main() -> Result<()> {
         PaymentParams::Nostr(_) => "NostrValue",
     };
     let kind = String::from(kind);
-
-    let mut map = Map::new();
-    map.insert(KEYS[0].into(), Value::String(kind));
+    map.insert("kind".to_string(), Value::String(kind));
 
     if args.all {
-        map = build(&parsed, map, unit);
+        map = build(&payment_params, map, unit);
     } else {
-        map = build_sparse(&parsed, map, unit);
+        map = build_sparse(&payment_params, map, unit);
     };
 
     if args.nips {
-        map.insert(KEYS[10].into(), parse_nostr(&parsed)?);
+        map.insert("nostr".to_string(), parse_nostr(&payment_params)?);
     }
 
     let json_out = if args.pretty {
@@ -131,133 +141,174 @@ fn main() -> Result<()> {
 }
 
 fn build(
-    parsed: &PaymentParams,
+    payment_params: &PaymentParams,
     mut map: Map<String, Value>,
     unit: Denomination,
 ) -> Map<String, Value> {
-    // net, addr, inv, pubk, amt, memo, lnurl, lnaddr, payjoin
-    let val = if let Some(n) = parsed.network() {
-        Value::String(n.to_string())
-    } else {
-        json!(null)
-    };
-    map.insert(KEYS[1].into(), val);
+    map.insert(
+        "network".to_string(), 
+        if let Some(net) = payment_params.network() {
+            Value::String(net.to_string())
+        } else {
+            json!(null)
+        }
+    );
 
-    let val = if let Some(a) = parsed.address() {
-        Value::String(a.to_string())
-    } else {
-        json!(null)
-    };
-    map.insert(KEYS[2].into(), val);
-
-    let val = if let Some(i) = parsed.invoice() {
-        Value::String(i.to_string())
-    } else {
-        json!(null)
-    };
-    map.insert(KEYS[3].into(), val);
-
-    let val = if let Some(k) = parsed.node_pubkey() {
-        Value::String(k.to_string())
-    } else {
-        json!(null)
-    };
-    map.insert(KEYS[4].into(), val);
-
-    let val = if let Some(a) = parsed.amount() {
-        Value::String(a.to_string_with_denomination(unit))
-    } else {
-        json!(null)
-    };
-    map.insert(KEYS[5].into(), val);
-
-    let val = if let Some(m) = parsed.memo() {
-        Value::String(m)
-    } else {
-        json!(null)
-    };
-    map.insert(KEYS[6].into(), val);
-
-    let val = if let Some(u) = parsed.lnurl() {
-        Value::String(u.to_string())
-    } else {
-        json!(null)
-    };
-    map.insert(KEYS[7].into(), val);
-
-    let val = if let Some(a) = parsed.lightning_address() {
-        Value::String(a.to_string())
-    } else {
-        json!(null)
-    };
-    map.insert(KEYS[8].into(), val);
+    map.insert(
+        "address".to_string(), 
+        if let Some(addr) = payment_params.address() {
+            Value::String(addr.to_string())
+        } else {
+            json!(null)
+        }
+    );
     
-    let val = if let Some(url) = parsed.payjoin_endpoint() {
-        Value::String(url.to_string())
-    } else {
-        json!(null)
-    };
-    map.insert(KEYS[9].into(), val);
+    map.insert(
+        "invoice".to_string(), 
+        if let Some(inv) = payment_params.invoice() {
+            Value::String(inv.to_string())
+        } else {
+            json!(null)
+        }
+    );
+    
+    map.insert(
+        "pubkey".to_string(), 
+        if let Some(pk) = payment_params.node_pubkey() {
+            Value::String(pk.to_string())
+        } else {
+            json!(null)
+        }
+    );
+    
+    map.insert(
+        "amount".to_string(), 
+        if let Some(amt) = payment_params.amount() {
+            Value::String(amt.to_string_with_denomination(unit))
+        } else {
+            json!(null)
+        }
+    );
+    
+    map.insert(
+        "memo".to_string(), 
+        if let Some(m) = payment_params.memo() {
+            Value::String(m)
+        } else {
+            json!(null)
+        }
+    );
+    
+    map.insert(
+        "lnurl".to_string(), 
+        if let Some(lnurl) = payment_params.lnurl() {
+            Value::String(lnurl.to_string())
+        } else {
+            json!(null)
+        }
+    );
+
+    map.insert(
+        "lnaddr".to_string(), 
+        if let Some(lnaddr) = payment_params.lightning_address() {
+            Value::String(lnaddr.to_string())
+        } else {
+            json!(null)
+        }
+    );
+
+    map.insert(
+        "payjoin".to_string(), 
+        if let Some(url) = payment_params.payjoin_endpoint() {
+            Value::String(url.to_string())
+        } else {
+            json!(null)
+        }
+    );
 
     map
 }
 
 fn build_sparse(
-    parsed: &PaymentParams,
+    payment_params: &PaymentParams,
     mut map: Map<String, Value>,
     unit: Denomination,
 ) -> Map<String, Value> {
-    // net, addr, inv, pubk, amt, memo, lnurl, lnaddr
-    if let Some(n) = parsed.network() {
-        let v = Value::String(n.to_string());
-        map.insert(KEYS[1].into(), v);
-    }
-
-    if let Some(a) = parsed.address() {
-        let v = Value::String(a.to_string());
-        map.insert(KEYS[2].into(), v);
-    }
-
-    if let Some(i) = parsed.invoice() {
-        let v = Value::String(i.to_string());
-        map.insert(KEYS[3].into(), v);
-    }
-
-    if let Some(k) = parsed.node_pubkey() {
-        let v = Value::String(k.to_string());
-        map.insert(KEYS[4].into(), v);
-    }
-
-    if let Some(amt) = parsed.amount() {
-        let s = amt.to_string_with_denomination(unit);
-        let v = Value::String(s);
-        map.insert(KEYS[5].into(), v);
-    }
-
-    if let Some(m) = parsed.memo() {
-        map.insert(KEYS[6].into(), Value::String(m));
-    }
-
-    if let Some(u) = parsed.lnurl() {
-        let v = Value::String(u.to_string());
-        map.insert(KEYS[7].into(), v);
-    }
-
-    if let Some(a) = parsed.lightning_address() {
-        let v = Value::String(a.to_string());
-        map.insert(KEYS[8].into(), v);
+    if let Some(net) = payment_params.network() {
+        map.insert(
+            "network".to_string(), 
+            Value::String(net.to_string())
+        );
     }
     
-    if let Some(url) = parsed.payjoin_endpoint() {
-        let v = Value::String(url.to_string());
-        map.insert(KEYS[9].into(), v);
+    if let Some(addr) = payment_params.address() {
+        map.insert(
+            "address".to_string(), 
+            Value::String(addr.to_string())
+        );
+    }
+    
+    if let Some(inv) = payment_params.invoice() {
+        map.insert(
+            "invoice".to_string(), 
+            Value::String(inv.to_string())
+        );
+    }
+    
+    if let Some(pk) = payment_params.node_pubkey() {
+        map.insert(
+            "pubkey".to_string(), 
+            Value::String(pk.to_string())
+        );
+    }
+    
+    if let Some(amt) = payment_params.amount() {
+        map.insert(
+            "amount".to_string(), 
+            Value::String(amt.to_string_with_denomination(unit))
+        );
+    }
+    
+    if let Some(m) = payment_params.memo() {
+        map.insert(
+            "memo".to_string(), 
+            Value::String(m)
+        );
+    }
+    
+    if let Some(lnurl) = payment_params.lnurl() {
+        map.insert(
+            "lnurl".to_string(), 
+            Value::String(lnurl.to_string())
+        );
+    }
+    
+    if let Some(lnurl) = payment_params.lnurl() {
+        map.insert(
+            "lnurl".to_string(), 
+            Value::String(lnurl.to_string())
+        );
+    }
+    
+    if let Some(lnaddr) = payment_params.lightning_address() {
+        map.insert(
+            "lnaddr".to_string(), 
+            Value::String(lnaddr.to_string())
+        );
+    }
+    
+    if let Some(url) = payment_params.payjoin_endpoint() {
+        map.insert(
+            "payjoin".to_string(), 
+            Value::String(url.to_string())
+        );
     }
 
     map
 }
 
-fn parse_nostr(parsed: &PaymentParams) -> Result<serde_json::Value> {
-    if let Some(k) = parsed.nostr_pubkey() {
+fn parse_nostr(payment_params: &PaymentParams) -> Result<serde_json::Value> {
+    if let Some(k) = payment_params.nostr_pubkey() {
         let bech32_str = k.to_bech32()?;
         let mut bech32 = String::from("bech32: ");
         bech32.push_str(&bech32_str);
