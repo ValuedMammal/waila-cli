@@ -21,10 +21,10 @@ struct Args {
     #[arg(
         short = 'n',
         long,
-        help = "Expose NIPs (experimental)",
+        help = "Parse a nostr pubkey in hex and bech32 (experimental)",
         requires = "query"
     )]
-    nips: bool,
+    nostr: bool,
 
     #[arg(short = 'p', long, help = "Pretty printed JSON", requires = "query")]
     pretty: bool,
@@ -88,9 +88,8 @@ fn main() -> Result<()> {
         return Ok(())
     };
 
-    /* Build a json map with the following keys: 
-    All fields, if applicable, are of type String, or Vec<String>
-    in the case of 'nostr'.
+    /* Build a `serde_json::Map` with the following keys. All fields, if applicable, are of type String, 
+    or `Map<String, String>` in the case of 'nostr'.
         kind
         network
         address
@@ -125,7 +124,7 @@ fn main() -> Result<()> {
         map = build_sparse(&payment_params, map, unit);
     };
 
-    if args.nips {
+    if args.nostr {
         map.insert("nostr".to_string(), parse_nostr(&payment_params)?);
     }
 
@@ -140,6 +139,7 @@ fn main() -> Result<()> {
     Ok(())
 }
 
+/// Construct a json map with all keys
 fn build(
     payment_params: &PaymentParams,
     mut map: Map<String, Value>,
@@ -229,6 +229,7 @@ fn build(
     map
 }
 
+/// Construct a json map with non-null fields only
 fn build_sparse(
     payment_params: &PaymentParams,
     mut map: Map<String, Value>,
@@ -307,20 +308,21 @@ fn build_sparse(
     map
 }
 
+/// Attempts to parse a nostr pubkey from [`PaymentParams`]. 
+/// Returns both hex and bech32 encoding.
+/// 
+/// ## Errors
+/// If unable to encode bech32
 fn parse_nostr(payment_params: &PaymentParams) -> Result<serde_json::Value> {
     if let Some(k) = payment_params.nostr_pubkey() {
-        let bech32_str = k.to_bech32()?;
-        let mut bech32 = String::from("bech32: ");
-        bech32.push_str(&bech32_str);
+        let bech32 = k.to_bech32()?;
+        let hex = k.to_string();
 
-        let hex_str = k.to_string();
-        let mut hex = String::from("hex: ");
-        hex.push_str(&hex_str);
-
-        Ok(Value::Array(vec![
-            Value::String(hex),
-            Value::String(bech32),
-        ]))
+        let mut obj = Map::new();
+        obj.insert("hex".to_string(), Value::String(hex));
+        obj.insert("bech32".to_string(), Value::String(bech32));
+        
+        Ok(Value::Object(obj))
     } else {
         Ok(json!(null))
     }
