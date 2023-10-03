@@ -117,7 +117,7 @@ fn main() -> Result<()> {
     */
     let mut map = Map::new();
 
-    // Any additional PaymentParams variants must be included here
+    // Any additional `PaymentParams` variants must be included here
     let kind = match payment_params {
         PaymentParams::OnChain(_) => "OnChain",
         PaymentParams::Bip21(_) => "UnifiedUri",
@@ -309,19 +309,19 @@ fn build_sparse(
 /// ## Errors
 /// If unable to encode bech32
 fn parse_nostr(payment_params: &PaymentParams) -> Result<serde_json::Value> {
-    if let Some(k) = payment_params.nostr_pubkey() {
-        // convert to the correct type for our imports
-        let mykey = XOnlyPublicKey::from_str(&k.to_string()).unwrap();
-        let bech32 = mykey.to_bech32()?;
-        
-        let hex = k.to_string();
+    let Some(k) = payment_params.nostr_pubkey() else {
+        return Ok(json!(null));
+    };
 
-        let mut obj = Map::new();
-        obj.insert("hex".to_string(), Value::String(hex));
-        obj.insert("bech32".to_string(), Value::String(bech32));
+    // convert to the correct type for our imports
+    let mykey = XOnlyPublicKey::from_str(&k.to_string()).expect("same value");
+    let bech32 = mykey.to_bech32()?;
 
-        Ok(Value::Object(obj))
-    } else {
-        Ok(json!(null))
-    }
+    let hex = k.to_string();
+
+    let mut obj = Map::new();
+    obj.insert("hex".to_string(), Value::String(hex));
+    obj.insert("bech32".to_string(), Value::String(bech32));
+
+    Ok(Value::Object(obj))
 }
