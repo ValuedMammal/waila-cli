@@ -115,6 +115,11 @@ fn main() -> Result<()> {
         PaymentParams::LightningAddress(_) => "LnAddress",
         PaymentParams::Nostr(_) => "NostrValue",
     };
+    if kind == "NostrValue" && !args.nostr {
+        // don't expose nostr results unsolicited
+        println!("not a bitcoin string");
+        return Ok(());
+    }
     let kind = String::from(kind);
     map.insert("kind".to_string(), Value::String(kind));
 
