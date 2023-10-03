@@ -3,7 +3,8 @@ use bitcoin_waila::PaymentParams;
 use clap::{command, Parser};
 use core::fmt;
 use core::str::FromStr;
-use nostr::nips::nip19::{self, ToBech32};
+use nostr::nips::nip19;
+use nostr::prelude::ToBech32;
 use serde_json::{json, Map, Value};
 
 #[derive(Parser, Debug)]
@@ -70,8 +71,9 @@ impl fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
+/// Key in the resulting json output
 static KEYS: &[&str] = &[
-    "kind", "network", "address", "invoice", "pubkey", "amount", "memo", "lnurl", "lnaddr", "nostr",
+    "kind", "network", "address", "invoice", "pubkey", "amount", "memo", "lnurl", "lnaddr", "payjoin", "nostr",
 ];
 
 type Result<T> = core::result::Result<T, Error>;
@@ -114,7 +116,7 @@ fn main() -> Result<()> {
     };
 
     if args.nips {
-        map.insert(KEYS[9].into(), parse_nostr(&parsed)?);
+        map.insert(KEYS[10].into(), parse_nostr(&parsed)?);
     }
 
     let json_out = if args.pretty {
@@ -133,7 +135,7 @@ fn build(
     mut map: Map<String, Value>,
     unit: Denomination,
 ) -> Map<String, Value> {
-    // net, addr, inv, pubk, amt, memo, lnurl, lnaddr
+    // net, addr, inv, pubk, amt, memo, lnurl, lnaddr, payjoin
     let val = if let Some(n) = parsed.network() {
         Value::String(n.to_string())
     } else {
@@ -189,6 +191,13 @@ fn build(
         json!(null)
     };
     map.insert(KEYS[8].into(), val);
+    
+    let val = if let Some(url) = parsed.payjoin_endpoint() {
+        Value::String(url.to_string())
+    } else {
+        json!(null)
+    };
+    map.insert(KEYS[9].into(), val);
 
     map
 }
@@ -237,6 +246,11 @@ fn build_sparse(
     if let Some(a) = parsed.lightning_address() {
         let v = Value::String(a.to_string());
         map.insert(KEYS[8].into(), v);
+    }
+    
+    if let Some(url) = parsed.payjoin_endpoint() {
+        let v = Value::String(url.to_string());
+        map.insert(KEYS[9].into(), v);
     }
 
     map
