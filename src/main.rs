@@ -42,6 +42,13 @@ struct Args {
     query: String,
 }
 
+macro_rules! bail {
+    ($err:expr) => (
+        println!($err);
+        std::process::exit(1);
+    )
+}
+
 #[derive(Debug)]
 enum Error {
     Serialize(serde_json::Error),
@@ -84,8 +91,7 @@ fn main() -> Result<()> {
     };
 
     let Ok(payment_params) = PaymentParams::from_str(&s) else {
-        println!("not a bitcoin string");
-        return Ok(())
+        bail!("not a bitcoin string");
     };
 
     /* Build a `serde_json::Map` with the following keys. All fields, if applicable, are of type String, 
@@ -117,11 +123,9 @@ fn main() -> Result<()> {
     };
     if kind == "NostrValue" && !args.nostr {
         // don't expose nostr results unsolicited
-        println!("not a bitcoin string");
-        return Ok(());
+        bail!("not a bitcoin string");
     }
-    let kind = String::from(kind);
-    map.insert("kind".to_string(), Value::String(kind));
+    map.insert("kind".to_string(), Value::String(kind.to_string()));
 
     if args.all {
         map = build(&payment_params, map, unit);
