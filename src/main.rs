@@ -1,11 +1,13 @@
-use bitcoin::Denomination;
+use bitcoin::{Amount, Denomination};
 use bitcoin_waila::PaymentParams;
 use clap::{command, Parser};
-use core::fmt;
-use core::str::FromStr;
-use nostr::nips::nip19;
-use nostr::prelude::ToBech32;
+use nostr::{
+    key::XOnlyPublicKey,
+    nips::nip19::{self, ToBech32},
+};
 use serde_json::{json, Map, Value};
+use std::fmt;
+use std::str::FromStr;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -26,7 +28,12 @@ struct Args {
     )]
     nostr: bool,
 
-    #[arg(short = 'f', long, help = "Remove extra whitespace in JSON output", requires = "query")]
+    #[arg(
+        short = 'f',
+        long,
+        help = "Remove extra whitespace in JSON output",
+        requires = "query"
+    )]
     flatten: bool,
 
     #[arg(
@@ -43,10 +50,10 @@ struct Args {
 }
 
 macro_rules! bail {
-    ($err:expr) => (
+    ($err:expr) => {
         println!($err);
         std::process::exit(1);
-    )
+    };
 }
 
 #[derive(Debug)]
@@ -94,7 +101,7 @@ fn main() -> Result<()> {
         bail!("not a bitcoin string");
     };
 
-    /* Build a `serde_json::Map` with the following keys. All fields, if applicable, are of type String, 
+    /* Build a `serde_json::Map` with the following keys. All fields, if applicable, are of type String,
     or `Map<String, String>` in the case of 'nostr'.
         kind
         network
@@ -155,84 +162,87 @@ fn build(
     unit: Denomination,
 ) -> Map<String, Value> {
     map.insert(
-        "network".to_string(), 
+        "network".to_string(),
         if let Some(net) = payment_params.network() {
             Value::String(net.to_string())
         } else {
             json!(null)
-        }
+        },
     );
 
     map.insert(
-        "address".to_string(), 
+        "address".to_string(),
         if let Some(addr) = payment_params.address() {
             Value::String(addr.to_string())
         } else {
             json!(null)
-        }
+        },
     );
-    
+
     map.insert(
-        "invoice".to_string(), 
+        "invoice".to_string(),
         if let Some(inv) = payment_params.invoice() {
             Value::String(inv.to_string())
         } else {
             json!(null)
-        }
+        },
     );
-    
+
     map.insert(
-        "pubkey".to_string(), 
+        "pubkey".to_string(),
         if let Some(pk) = payment_params.node_pubkey() {
             Value::String(pk.to_string())
         } else {
             json!(null)
-        }
+        },
     );
-    
+
     map.insert(
-        "amount".to_string(), 
+        "amount".to_string(),
         if let Some(amt) = payment_params.amount() {
+            // convert to the correct type for our imports
+            let sat = amt.to_sat();
+            let amt = Amount::from_sat(sat);
             Value::String(amt.to_string_with_denomination(unit))
         } else {
             json!(null)
-        }
+        },
     );
-    
+
     map.insert(
-        "memo".to_string(), 
+        "memo".to_string(),
         if let Some(m) = payment_params.memo() {
             Value::String(m)
         } else {
             json!(null)
-        }
+        },
     );
-    
+
     map.insert(
-        "lnurl".to_string(), 
+        "lnurl".to_string(),
         if let Some(lnurl) = payment_params.lnurl() {
             Value::String(lnurl.to_string())
         } else {
             json!(null)
-        }
+        },
     );
 
     map.insert(
-        "lnaddr".to_string(), 
+        "lnaddr".to_string(),
         if let Some(lnaddr) = payment_params.lightning_address() {
             Value::String(lnaddr.to_string())
         } else {
             json!(null)
-        }
+        },
     );
 
     map.insert(
-        "payjoin".to_string(), 
+        "payjoin".to_string(),
         if let Some(url) = payment_params.payjoin_endpoint() {
             Value::String(url.to_string())
         } else {
             json!(null)
-        }
+        },
     );
 
     map
@@ -245,92 +255,71 @@ fn build_sparse(
     unit: Denomination,
 ) -> Map<String, Value> {
     if let Some(net) = payment_params.network() {
-        map.insert(
-            "network".to_string(), 
-            Value::String(net.to_string())
-        );
+        map.insert("network".to_string(), Value::String(net.to_string()));
     }
-    
+
     if let Some(addr) = payment_params.address() {
-        map.insert(
-            "address".to_string(), 
-            Value::String(addr.to_string())
-        );
+        map.insert("address".to_string(), Value::String(addr.to_string()));
     }
-    
+
     if let Some(inv) = payment_params.invoice() {
-        map.insert(
-            "invoice".to_string(), 
-            Value::String(inv.to_string())
-        );
+        map.insert("invoice".to_string(), Value::String(inv.to_string()));
     }
-    
+
     if let Some(pk) = payment_params.node_pubkey() {
-        map.insert(
-            "pubkey".to_string(), 
-            Value::String(pk.to_string())
-        );
+        map.insert("pubkey".to_string(), Value::String(pk.to_string()));
     }
-    
+
     if let Some(amt) = payment_params.amount() {
+        // convert to the correct type for our imports
+        let sat = amt.to_sat();
+        let amt = Amount::from_sat(sat);
         map.insert(
-            "amount".to_string(), 
-            Value::String(amt.to_string_with_denomination(unit))
+            "amount".to_string(),
+            Value::String(amt.to_string_with_denomination(unit)),
         );
     }
-    
+
     if let Some(m) = payment_params.memo() {
-        map.insert(
-            "memo".to_string(), 
-            Value::String(m)
-        );
+        map.insert("memo".to_string(), Value::String(m));
     }
-    
+
     if let Some(lnurl) = payment_params.lnurl() {
-        map.insert(
-            "lnurl".to_string(), 
-            Value::String(lnurl.to_string())
-        );
+        map.insert("lnurl".to_string(), Value::String(lnurl.to_string()));
     }
-    
+
     if let Some(lnurl) = payment_params.lnurl() {
-        map.insert(
-            "lnurl".to_string(), 
-            Value::String(lnurl.to_string())
-        );
+        map.insert("lnurl".to_string(), Value::String(lnurl.to_string()));
     }
-    
+
     if let Some(lnaddr) = payment_params.lightning_address() {
-        map.insert(
-            "lnaddr".to_string(), 
-            Value::String(lnaddr.to_string())
-        );
+        map.insert("lnaddr".to_string(), Value::String(lnaddr.to_string()));
     }
-    
+
     if let Some(url) = payment_params.payjoin_endpoint() {
-        map.insert(
-            "payjoin".to_string(), 
-            Value::String(url.to_string())
-        );
+        map.insert("payjoin".to_string(), Value::String(url.to_string()));
     }
 
     map
 }
 
-/// Attempts to parse a nostr pubkey from [`PaymentParams`]. 
+/// Attempts to parse a nostr pubkey from [`PaymentParams`].
 /// Returns both hex and bech32 encoding.
-/// 
+///
 /// ## Errors
 /// If unable to encode bech32
 fn parse_nostr(payment_params: &PaymentParams) -> Result<serde_json::Value> {
     if let Some(k) = payment_params.nostr_pubkey() {
-        let bech32 = k.to_bech32()?;
+        // convert to the correct type for our imports
+        let mykey = XOnlyPublicKey::from_str(&k.to_string()).unwrap();
+        let bech32 = mykey.to_bech32()?;
+        
         let hex = k.to_string();
 
         let mut obj = Map::new();
         obj.insert("hex".to_string(), Value::String(hex));
         obj.insert("bech32".to_string(), Value::String(bech32));
-        
+
         Ok(Value::Object(obj))
     } else {
         Ok(json!(null))
