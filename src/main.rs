@@ -26,8 +26,8 @@ struct Args {
     )]
     nostr: bool,
 
-    #[arg(short = 'p', long, help = "Pretty printed JSON", requires = "query")]
-    pretty: bool,
+    #[arg(short = 'f', long, help = "Remove extra whitespace in JSON output", requires = "query")]
+    flatten: bool,
 
     #[arg(
         short = 'u',
@@ -128,10 +128,10 @@ fn main() -> Result<()> {
         map.insert("nostr".to_string(), parse_nostr(&payment_params)?);
     }
 
-    let json_out = if args.pretty {
-        serde_json::to_string_pretty(&map)?
-    } else {
+    let json_out = if args.flatten {
         serde_json::to_string(&map)?
+    } else {
+        serde_json::to_string_pretty(&map)?
     };
 
     println!("{json_out}");
